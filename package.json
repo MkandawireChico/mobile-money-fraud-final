@@ -1,0 +1,19 @@
+{
+  "name": "mobile-money-fraud-detection",
+  "version": "1.0.0",
+  "description": "AI-Powered Fraud Detection System for Malawi Mobile Money",
+  "scripts": {
+    "generate-data": "cd data_generation && python generate_data.py",
+    "enhance-charts": "cd data_generation && python enhance_for_charts.py",
+    "setup-fraud-detection": "npm run generate-data && npm run enhance-charts"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "axios": "^1.10.0",
+    "git": "^0.1.5",
+    "websocket": "^1.0.35"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.4.1"
+  }
+}

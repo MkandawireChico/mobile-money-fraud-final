@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fraud Case Review - FraudSense</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1f2937;
+            line-height: 1.6;
+        }
+
+        .case-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        .case-header {
+            background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 25px rgba(239, 68, 68, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .case-header::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            width: 200px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+
+        .case-info h1 {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+
+        .case-meta {
+            display: flex;
+            gap: 2rem;
+            opacity: 0.9;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .priority-badge {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 2rem;
+            font-weight: 700;
+            backdrop-filter: blur(10px);
+        }
+
+        .priority-high {
+            background: rgba(239, 68, 68, 0.3);
+        }
+
+        /* Main Layout */
+        .case-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+
+        /* Left Column */
+        .case-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .detail-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1f2937;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-content {
+            padding: 1.5rem;
+        }
+
+        /* Transaction Details */
+        .transaction-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .detail-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .detail-value {
+            font-size: 1rem;
+            color: #1f2937;
+            font-weight: 600;
+        }
+
+        .amount-value {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #ef4444;
+        }
+
+        .phone-number {
+            font-family: 'Monaco', 'Menlo', monospace;
+            background: #f3f4f6;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+        }
+
+        /* Risk Analysis */
+        .risk-factors {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .risk-item {
+            display: flex;
+            align-items: center;
+            justify-content: between;
+            padding: 1rem;
+            background: #f9fafb;
+            border-radius: 0.5rem;
+            border-left: 4px solid;
+        }
+
+        .risk-item.high {
+            border-left-color: #ef4444;
+            background: rgba(239, 68, 68, 0.05);
+        }
+
+        .risk-item.medium {
+            border-left-color: #f59e0b;
+            background: rgba(245, 158, 11, 0.05);
+        }
+
+        .risk-item.low {
+            border-left-color: #10b981;
+            background: rgba(16, 185, 129, 0.05);
+        }
+
+        .risk-content {
+            flex: 1;
+        }
+
+        .risk-title {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .risk-description {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        .risk-score {
+            font-size: 1.5rem;
+            font-weight: 800;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            color: white;
+        }
+
+        .risk-score.high {
+            background: #ef4444;
+        }
+
+        .risk-score.medium {
+            background: #f59e0b;
+        }
+
+        .risk-score.low {
+            background: #10b981;
+        }
+
+        /* Evidence Section */
+        .evidence-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .evidence-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: #f9fafb;
+            border-radius: 0.5rem;
+        }
+
+        .evidence-icon {
+            width: 40px;
+            height: 40px;
+            background: #3b82f6;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .evidence-content h4 {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .evidence-content p {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        /* Right Column - Actions */
+        .case-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .action-card {
+            background: white;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        /* Decision Panel */
+        .decision-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .decision-btn {
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-confirm-fraud {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-confirm-fraud:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-mark-legitimate {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-mark-legitimate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-needs-review {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-needs-review:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+        }
+
+        /* Investigation Tools */
+        .tool-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .tool-btn {
+            padding: 1rem;
+            background: #f9fafb;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.75rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+
+        .tool-btn:hover {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .tool-btn i {
+            display: block;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Case Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 2rem;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 1rem;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e5e7eb;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -1.5rem;
+            top: 0.5rem;
+            width: 12px;
+            height: 12px;
+            background: #3b82f6;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 0 0 3px #e5e7eb;
+        }
+
+        .timeline-content {
+            background: #f9fafb;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+
+        .timeline-title {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 0.25rem;
+        }
+
+        .timeline-meta {
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+
+        /* Notes Section */
+        .notes-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .notes-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 1rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 0.5rem;
+            font-family: inherit;
+            resize: vertical;
+        }
+
+        .notes-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .notes-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-save-notes {
+            background: #3b82f6;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-save-notes:hover {
+            background: #2563eb;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .case-layout {
+                grid-template-columns: 1fr;
+            }
+            
+            .transaction-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .case-container {
+                padding: 1rem;
+            }
+
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .case-meta {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .tool-buttons {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="case-container">
+        <!-- Case Header -->
+        <div class="case-header">
+            <div class="header-content">
+                <div class="case-info">
+                    <h1>Fraud Case #FC-2024-001847</h1>
+                    <div class="case-meta">
+                        <div class="meta-item">
+                            <i class="fas fa-clock"></i>
+                            <span>Detected 15 minutes ago</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-user"></i>
+                            <span>Assigned to: John Analyst</span>
+                        </div>
+                        <div class="meta-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>Risk Score: 94/100</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="priority-badge priority-high">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    HIGH PRIORITY
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="case-layout">
+            <!-- Left Column - Case Details -->
+            <div class="case-details">
+                <!-- Transaction Details -->
+                <div class="detail-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-exchange-alt"></i>
+                            Transaction Details
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="transaction-grid">
+                            <div class="detail-item">
+                                <span class="detail-label">Transaction ID</span>
+                                <span class="detail-value">TXN-2024-001847</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Amount</span>
+                                <span class="detail-value amount-value">MWK 500,000</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">From</span>
+                                <span class="detail-value phone-number">+265 888 123 456</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">To</span>
+                                <span class="detail-value phone-number">+265 999 987 654</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Transaction Type</span>
+                                <span class="detail-value">P2P Transfer</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Provider</span>
+                                <span class="detail-value">TNM Mpamba</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Location</span>
+                                <span class="detail-value">Lilongwe, Malawi</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">Timestamp</span>
+                                <span class="detail-value">2024-01-15 14:32:18</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Analysis -->
+                <div class="detail-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-shield-alt"></i>
+                            Risk Analysis
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="risk-factors">
+                            <div class="risk-item high">
+                                <div class="risk-content">
+                                    <div class="risk-title">Unusually High Amount</div>
+                                    <div class="risk-description">Amount is 450% above user's average transaction</div>
+                                </div>
+                                <div class="risk-score high">95</div>
+                            </div>
+                            <div class="risk-item medium">
+                                <div class="risk-content">
+                                    <div class="risk-title">New Recipient</div>
+                                    <div class="risk-description">First transaction to this recipient</div>
+                                </div>
+                                <div class="risk-score medium">72</div>
+                            </div>
+                            <div class="risk-item medium">
+                                <div class="risk-content">
+                                    <div class="risk-title">Unusual Time Pattern</div>
+                                    <div class="risk-description">Transaction outside normal hours</div>
+                                </div>
+                                <div class="risk-score medium">68</div>
+                            </div>
+                            <div class="risk-item low">
+                                <div class="risk-content">
+                                    <div class="risk-title">Device Verification</div>
+                                    <div class="risk-description">Transaction from known device</div>
+                                </div>
+                                <div class="risk-score low">25</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Evidence -->
+                <div class="detail-card">
+                    <div class="card-header">
+                        <h2 class="card-title">
+                            <i class="fas fa-search"></i>
+                            Supporting Evidence
+                        </h2>
+                    </div>
+                    <div class="card-content">
+                        <div class="evidence-list">
+                            <div class="evidence-item">
+                                <div class="evidence-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="evidence-content">
+                                    <h4>ML Model Prediction</h4>
+                                    <p>Advanced fraud detection model flagged this transaction with 94% confidence</p>
+                                </div>
+                            </div>
+                            <div class="evidence-item">
+                                <div class="evidence-icon">
+                                    <i class="fas fa-history"></i>
+                                </div>
+                                <div class="evidence-content">
+                                    <h4>Transaction History</h4>
+                                    <p>User's previous transactions were all under MWK 50,000 in the past 6 months</p>
+                                </div>
+                            </div>
+                            <div class="evidence-item">
+                                <div class="evidence-icon">
+                                    <i class="fas fa-clock"></i>
+                                </div>
+                                <div class="evidence-content">
+                                    <h4>Behavioral Analysis</h4>
+                                    <p>Transaction occurred at 2:32 AM, outside user's typical activity window (8 AM - 10 PM)</p>
+                                </div>
+                            </div>
+                            <div class="evidence-item">
+                                <div class="evidence-icon">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="evidence-content">
+                                    <h4>Network Analysis</h4>
+                                    <p>Recipient has no previous connection to sender's transaction network</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column - Actions -->
+            <div class="case-actions">
+                <!-- Decision Panel -->
+                <div class="action-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-gavel"></i>
+                            Case Decision
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="decision-buttons">
+                            <button class="decision-btn btn-confirm-fraud">
+                                <i class="fas fa-ban"></i>
+                                Confirm Fraud
+                            </button>
+                            <button class="decision-btn btn-mark-legitimate">
+                                <i class="fas fa-check"></i>
+                                Mark Legitimate
+                            </button>
+                            <button class="decision-btn btn-needs-review">
+                                <i class="fas fa-eye"></i>
+                                Needs Further Review
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Investigation Tools -->
+                <div class="action-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-tools"></i>
+                            Investigation Tools
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="tool-buttons">
+                            <button class="tool-btn">
+                                <i class="fas fa-user"></i>
+                                User Profile
+                            </button>
+                            <button class="tool-btn">
+                                <i class="fas fa-history"></i>
+                                Transaction History
+                            </button>
+                            <button class="tool-btn">
+                                <i class="fas fa-network-wired"></i>
+                                Network Analysis
+                            </button>
+                            <button class="tool-btn">
+                                <i class="fas fa-map-marker-alt"></i>
+                                Location Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Case Timeline -->
+                <div class="action-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-timeline"></i>
+                            Case Timeline
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="timeline">
+                            <div class="timeline-item">
+                                <div class="timeline-content">
+                                    <div class="timeline-title">Case Created</div>
+                                    <div class="timeline-meta">System • 15 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-content">
+                                    <div class="timeline-title">ML Analysis Completed</div>
+                                    <div class="timeline-meta">AI Engine • 14 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-content">
+                                    <div class="timeline-title">Assigned to Analyst</div>
+                                    <div class="timeline-meta">System • 12 minutes ago</div>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-content">
+                                    <div class="timeline-title">Case Opened</div>
+                                    <div class="timeline-meta">John Analyst • 2 minutes ago</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="action-card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-sticky-note"></i>
+                            Investigation Notes
+                        </h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="notes-form">
+                            <textarea class="notes-textarea" placeholder="Add your investigation notes here..."></textarea>
+                            <div class="notes-actions">
+                                <button class="btn-save-notes">Save Notes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Decision button handlers
+        document.querySelectorAll('.decision-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const action = this.textContent.trim();
+                if (confirm(`Are you sure you want to ${action.toLowerCase()}?`)) {
+                    // Handle decision logic here
+                    alert(`Case marked as: ${action}`);
+                }
+            });
+        });
+
+        // Tool button handlers
+        document.querySelectorAll('.tool-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tool = this.textContent.trim();
+                alert(`Opening ${tool}...`);
+            });
+        });
+
+        // Notes auto-save
+        const notesTextarea = document.querySelector('.notes-textarea');
+        let saveTimeout;
+
+        notesTextarea.addEventListener('input', function() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                // Auto-save logic here
+                console.log('Notes auto-saved');
+            }, 2000);
+        });
+
+        // Save notes button
+        document.querySelector('.btn-save-notes').addEventListener('click', function() {
+            const notes = notesTextarea.value;
+            if (notes.trim()) {
+                alert('Notes saved successfully!');
+            } else {
+                alert('Please enter some notes before saving.');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+# Environment variables
+.env
+
+# Node modules
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build artifacts
+build/
+dist/
+client/build/
+client/dist/
+
+# Temporary files created by multer (for CSV uploads)
+uploads/
+
+# OS generated files
+.DS_Store
+.vscode/
+
+# Log files (if any)
+*.log

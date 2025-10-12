@@ -1,0 +1,155 @@
+{
+  "training_summary": {
+    "timestamp": "2025-09-05T18:05:30.713538",
+    "best_model": "elliptic_envelope",
+    "training_data_size": 200000,
+    "feature_count": 33,
+    "models_trained": 4,
+    "failed_models": 0
+  },
+  "unsupervised_learning_justification": {
+    "why_unsupervised": [
+      "Real-world fraud detection lacks reliable ground truth labels",
+      "Fraud patterns evolve rapidly, making supervised learning quickly outdated",
+      "Unsupervised methods can detect novel, previously unknown fraud patterns",
+      "Reduces dependency on potentially biased historical fraud classifications",
+      "Better suited for detecting zero-day fraud attacks and emerging threats"
+    ],
+    "evaluation_methodology": [
+      "Silhouette Score: Measures how well anomalies are separated from normal transactions",
+      "Separation Quality: Quantifies the distance between normal and anomalous score distributions",
+      "Score Consistency: Lower variance in normal transactions indicates better pattern learning",
+      "Detection Rate: Ensures reasonable anomaly detection percentage (typically 1-3%)"
+    ]
+  },
+  "model_comparison": {
+    "isolation_forest": {
+      "description": "Isolation Forest - Isolates anomalies by randomly selecting features and split values",
+      "best_params": {
+        "contamination": 0.025,
+        "max_samples": "auto",
+        "n_estimators": 200,
+        "random_state": 42
+      },
+      "performance_metrics": {
+        "silhouette_score": 0.44186152808387824,
+        "anomaly_score_mean": 0.10067071135913,
+        "anomaly_score_std": 0.04124612463925896,
+        "anomaly_score_range": 0.3124478956264983,
+        "separation_quality": 0.13626268109208292,
+        "anomaly_percentage": 2.0,
+        "normal_score_variance": 0.0013551699169900516
+      },
+      "composite_score": 0.5172174147861158
+    },
+    "one_class_svm": {
+      "description": "One-Class SVM - Learns decision boundary around normal data",
+      "best_params": {
+        "gamma": "auto",
+        "kernel": "rbf",
+        "nu": 0.025
+      },
+      "performance_metrics": {
+        "silhouette_score": 0.4207738517422647,
+        "anomaly_score_mean": 80.03682833315956,
+        "anomaly_score_std": 37.3845586163638,
+        "anomaly_score_range": 393.38479262976796,
+        "separation_quality": 125.53509580197758,
+        "anomaly_percentage": 2.0,
+        "normal_score_variance": 1078.612749987911
+      },
+      "composite_score": 37.82911615870502
+    },
+    "local_outlier_factor": {
+      "description": "Local Outlier Factor - Detects anomalies based on local density",
+      "best_params": {
+        "algorithm": "auto",
+        "contamination": 0.015,
+        "n_neighbors": 40
+      },
+      "performance_metrics": {
+        "silhouette_score": 0.17379736260061462,
+        "anomaly_score_mean": -1.060514380746458,
+        "anomaly_score_std": 0.07320385325926149,
+        "anomaly_score_range": 1.9395868323893735,
+        "separation_quality": 0.28274205151264553,
+        "anomaly_percentage": 2.0,
+        "normal_score_variance": 0.003704832169036073
+      },
+      "composite_score": 0.45323421337854447
+    },
+    "elliptic_envelope": {
+      "description": "Elliptic Envelope - Assumes data follows Gaussian distribution",
+      "best_params": {
+        "contamination": 0.01,
+        "support_fraction": 0.9
+      },
+      "performance_metrics": {
+        "silhouette_score": 0.2958351482913759,
+        "anomaly_score_mean": 304290.03704303864,
+        "anomaly_score_std": 37897.21079929546,
+        "anomaly_score_range": 323157.62622919376,
+        "separation_quality": 227884.34592321585,
+        "anomaly_percentage": 2.0,
+        "normal_score_variance": 174485559.74147272
+      },
+      "composite_score": 68365.42211102578
+    }
+  },
+  "feature_engineering": {
+    "total_features": 33,
+    "feature_categories": {
+      "amount_based": 11,
+      "temporal": 8,
+      "behavioral": 9,
+      "location": 4,
+      "device": 3
+    },
+    "selected_features": [
+      "amount",
+      "amount_log",
+      "amount_zscore_user",
+      "amount_deviation_from_user_median",
+      "is_user_amount_outlier",
+      "amount_ratio_to_user_max",
+      "user_total_transactions",
+      "user_total_amount_spent",
+      "user_hour_diversity",
+      "user_location_diversity",
+      "user_transaction_type_diversity",
+      "transaction_hour_of_day",
+      "transaction_day_of_week",
+      "hour_sin",
+      "hour_cos",
+      "is_weekend",
+      "is_business_hours",
+      "time_since_last_hours",
+      "is_rapid_transaction",
+      "is_new_location",
+      "is_new_device",
+      "is_rare_location",
+      "location_user_id_nunique",
+      "transaction_type",
+      "network_operator",
+      "device_type",
+      "daily_transaction_count",
+      "amount_percentile_for_user",
+      "night_high_amount",
+      "weekend_high_amount",
+      "new_device_high_amount",
+      "account_age_days",
+      "is_new_account"
+    ]
+  },
+  "deployment_recommendations": {
+    "best_model": "elliptic_envelope",
+    "recommended_threshold": "Use 98th percentile of anomaly scores for flagging",
+    "retraining_frequency": "Monthly retraining recommended due to evolving fraud patterns",
+    "monitoring_metrics": [
+      "Daily anomaly detection rate (should be 1-3%)",
+      "Average anomaly scores over time",
+      "Feature importance drift detection",
+      "Model performance degradation alerts"
+    ]
+  }
+}
