@@ -21,3 +21,7 @@ uploads/
 
 # Log files (if any)
 *.log
+# Ignore model files
+*.joblib
+*.pkl
+*.h5
