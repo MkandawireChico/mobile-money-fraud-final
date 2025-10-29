@@ -1,5 +1,5 @@
 // client/src/api/axios.ts
-import axios, { AxiosRequestConfig, AxiosResponse, AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosRequestConfig, AxiosResponse, AxiosError, InternalAxiosRequestConfig, AxiosHeaders } from 'axios';
 
 interface DateRange {
     start: string | Date;
@@ -31,7 +31,7 @@ instance.interceptors.request.use(
         const token = localStorage.getItem('token');
         if (token) {
             if (!config.headers) {
-                config.headers = {};
+                config.headers = new AxiosHeaders();
             }
             config.headers['Authorization'] = `Bearer ${token}`;
         }
