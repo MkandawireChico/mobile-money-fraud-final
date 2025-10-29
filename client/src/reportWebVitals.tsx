@@ -13,4 +13,5 @@ const reportWebVitals = (onPerfEntry?: ReportCallback) => {
         });
     }
 };
+
 export default reportWebVitals;
