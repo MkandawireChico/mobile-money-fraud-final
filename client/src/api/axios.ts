@@ -78,7 +78,7 @@ export const mlApi = {
         instance.put('/ml/thresholds', thresholds),
     
     // Get anomaly score distribution for dashboard
-    getAnomalyDistribution: (dateRange) => 
+    getAnomalyDistribution: (dateRange: { start: string | Date; end: string | Date }) => 
         instance.get('/ml/anomaly-distribution', { params: dateRange })
 };
 
