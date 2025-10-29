@@ -42,7 +42,7 @@ instance.interceptors.response.use(
 // ML-specific API endpoints for the comprehensive fraud detection system
 export const mlApi = {
     // Analyze single transaction with comprehensive ML model
-    analyzeTransaction: (transactionId) => 
+    analyzeTransaction: (transactionId: string) => 
         instance.post(`/ml/analyze-transaction/${transactionId}`),
     
     // Get detailed anomaly explanation
