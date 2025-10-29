@@ -13,6 +13,23 @@ const path = require('path');
 const axios = require('axios');
 const rateLimit = require('express-rate-limit');
 
+// Security headers middleware
+const securityHeaders = (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+};
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+
 const { pool } = require('./config/db');
 const { setupSwagger } = require('./config/swagger');
 const redisClient = redis.createClient({
@@ -151,11 +168,47 @@ async function initializeApp() {
         // const { initializeWebSocketServer } = require('./socket/websocketHandler');
         // initializeWebSocketServer(server, { userModel });
 
-        app.use(express.json({ limit: '50mb' }));
-        app.use(express.urlencoded({ limit: '50mb', extended: true }));
-        app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:3000', credentials: true }));
-        app.use(helmet());
+        // Trust first proxy if behind a reverse proxy (e.g., Render, Heroku)
+        app.set('trust proxy', 1);
+
+        // CORS configuration
+        const corsOptions = {
+          origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+          methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+          allowedHeaders: ['Content-Type', 'Authorization'],
+          credentials: true,
+          optionsSuccessStatus: 200 // For legacy browser support
+        };
+
+        // Middleware
+        app.use(cors(corsOptions));
+        app.use(helmet({
+          contentSecurityPolicy: {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'"],
+              styleSrc: ["'self'"],
+              imgSrc: ["'self'"],
+              connectSrc: ["'self'"],
+              fontSrc: ["'self'"],
+              objectSrc: ["'none'"],
+              mediaSrc: ["'self'"],
+              frameSrc: ["'none'"],
+              formAction: ["'self'"],
+              upgradeInsecureRequests: [],
+            },
+          },
+          crossOriginResourcePolicy: { policy: "same-site" },
+          crossOriginOpenerPolicy: { policy: "same-origin" },
+          crossOriginEmbedderPolicy: { policy: "require-corp" },
+          referrerPolicy: { policy: 'same-origin' },
+        }));
+
+        app.use(securityHeaders);
+        app.use(limiter);
         app.use(morgan('dev'));
+        app.use(express.json({ limit: '10kb' }));
+        app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
         try {
             setupSwagger(app);
@@ -231,16 +284,18 @@ async function initializeApp() {
         const errorHandler = require('./middleware/errorHandler');
         app.use(errorHandler);
 
-        const PORT = process.env.PORT || 5000;
+        // Only start the server if not in Vercel environment
+        if (process.env.VERCEL !== '1') {
+            const PORT = process.env.PORT || 5000;
+            server.listen(PORT, () => {
+                console.log(`Server running on port ${PORT}`);
+            });
 
-        server.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
-
-        process.on('unhandledRejection', (err, promise) => {
-            console.error(`Error: ${err.message}`);
-            server.close(() => process.exit(1));
-        });
+            process.on('unhandledRejection', (err, promise) => {
+                console.error(`Error: ${err.message}`);
+                server.close(() => process.exit(1));
+            });
+        }
 
         module.exports = {
             app,
