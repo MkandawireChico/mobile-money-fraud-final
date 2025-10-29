@@ -172,16 +172,11 @@ async function initializeApp() {
         app.set('trust proxy', 1);
 
         // CORS configuration
-        const corsOptions = {
-          origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-          methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-          allowedHeaders: ['Content-Type', 'Authorization'],
-          credentials: true,
-          optionsSuccessStatus: 200 // For legacy browser support
-        };
+        app.use(cors({
+          origin: process.env.FRONTEND_URL || "http://localhost:3000",
+          credentials: true
+        }));
 
-        // Middleware
-        app.use(cors(corsOptions));
         app.use(helmet({
           contentSecurityPolicy: {
             directives: {
@@ -287,13 +282,13 @@ async function initializeApp() {
         // Only start the server if not in Vercel environment
         if (process.env.VERCEL !== '1') {
             const PORT = process.env.PORT || 5000;
-            server.listen(PORT, () => {
+            app.listen(PORT, '0.0.0.0', () => {
                 console.log(`Server running on port ${PORT}`);
             });
 
             process.on('unhandledRejection', (err, promise) => {
                 console.error(`Error: ${err.message}`);
-                server.close(() => process.exit(1));
+                app.close(() => process.exit(1));
             });
         }
 

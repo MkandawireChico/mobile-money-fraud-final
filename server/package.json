@@ -1,5 +1,5 @@
 {
-      "name": "server",
+      "name": "fraud-detection-backend",
       "version": "1.0.0",
       "description": "Backend for Fraud Detection System",
       "main": "app.js",

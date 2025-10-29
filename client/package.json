@@ -1,5 +1,5 @@
 {
-    "name": "fraud-detection-client",
+    "name": "fraud-detection-frontend",
     "version": "1.0.0",
     "private": true,
     "proxy": "http://localhost:5000",
