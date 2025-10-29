@@ -74,7 +74,7 @@ export const mlApi = {
         instance.get('/ml/training-history'),
     
     // Update anomaly score thresholds
-    updateThresholds: (thresholds) => 
+    updateThresholds: (thresholds: any) => 
         instance.put('/ml/thresholds', thresholds),
     
     // Get anomaly score distribution for dashboard
