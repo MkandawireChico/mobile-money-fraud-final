@@ -62,7 +62,7 @@ export const mlApi = {
         instance.post('/ml/batch-analyze', { transaction_ids: transactionIds }),
     
     // Get feature importance for a specific transaction
-    getFeatureContributions: (transactionId) => 
+    getFeatureContributions: (transactionId: string) => 
         instance.get(`/ml/feature-contributions/${transactionId}`),
     
     // Trigger model retraining (admin only)
