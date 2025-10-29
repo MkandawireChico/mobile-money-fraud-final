@@ -58,7 +58,7 @@ export const mlApi = {
         instance.get('/ml/model-metrics'),
     
     // Batch analyze multiple transactions
-    batchAnalyze: (transactionIds) => 
+    batchAnalyze: (transactionIds: string[]) => 
         instance.post('/ml/batch-analyze', { transaction_ids: transactionIds }),
     
     // Get feature importance for a specific transaction
