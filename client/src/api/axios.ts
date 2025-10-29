@@ -46,7 +46,7 @@ export const mlApi = {
         instance.post(`/ml/analyze-transaction/${transactionId}`),
     
     // Get detailed anomaly explanation
-    getAnomalyExplanation: (transactionId) => 
+    getAnomalyExplanation: (transactionId: string) => 
         instance.get(`/ml/explain-anomaly/${transactionId}`),
     
     // Get ML model status and performance metrics
