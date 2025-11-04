@@ -2,7 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const morgan = require('morgan');
+// use structured logging with pino
+// morgan will be removed in favor of pino-http for structured request logs
+// const morgan = require('morgan');
+const { logger, httpLogger } = require('./utils/logger');
+const clientMetrics = require('prom-client');
 const http = require('http');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
@@ -153,8 +157,9 @@ async function initializeApp() {
         const AuditService = require('./services/auditService');
         const auditService = new AuditService(auditLogModel);
 
-        anomalyController = require('./controllers/anomalyController')(anomalyModel, transactionModel, auditLogModel, io);
-        transactionController = require('./controllers/transactionController')(transactionModel, auditLogModel, io);
+    anomalyController = require('./controllers/anomalyController')(anomalyModel, transactionModel, auditLogModel, io);
+    // Pass anomalyService into transactionController so transaction handlers can create/update anomalies
+    transactionController = require('./controllers/transactionController')(transactionModel, auditLogModel, io, anomalyService);
         authController = require('./controllers/authController')(userModel, jwt, bcrypt, redisClient, auditLogModel);
         userController = require('./controllers/userController')(userModel, auditLogModel);
         dashboardController = require('./controllers/dashboardController')(userModel, transactionModel, anomalyModel, auditLogModel, io, {}, anomalyController);
@@ -177,7 +182,7 @@ async function initializeApp() {
           credentials: true
         }));
 
-        app.use(helmet({
+                app.use(helmet({
           contentSecurityPolicy: {
             directives: {
               defaultSrc: ["'self'"],
@@ -201,9 +206,26 @@ async function initializeApp() {
 
         app.use(securityHeaders);
         app.use(limiter);
-        app.use(morgan('dev'));
+        // pino http middleware for structured request logging
+        app.use(httpLogger);
         app.use(express.json({ limit: '10kb' }));
         app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+        // Prometheus metrics - collect default metrics
+        try {
+            clientMetrics.collectDefaultMetrics({ timeout: 5000 });
+
+            app.get('/metrics', async (req, res) => {
+                try {
+                    res.set('Content-Type', clientMetrics.register.contentType);
+                    res.end(await clientMetrics.register.metrics());
+                } catch (err) {
+                    res.status(500).end(err.message);
+                }
+            });
+        } catch (metricsErr) {
+            logger.warn('Failed to initialize metrics collection:', metricsErr.message || metricsErr);
+        }
 
         try {
             setupSwagger(app);
@@ -219,6 +241,7 @@ async function initializeApp() {
         });
 
         app.get('/api/ping', (req, res) => {
+            logger.info({ route: '/api/ping' }, 'Ping received');
             res.json({ success: true, message: 'Pong from backend!' });
         });
 
@@ -282,13 +305,21 @@ async function initializeApp() {
         // Only start the server if not in Vercel environment
         if (process.env.VERCEL !== '1') {
             const PORT = process.env.PORT || 5000;
-            app.listen(PORT, '0.0.0.0', () => {
+            // Start the underlying HTTP server (so Socket.IO is bound correctly)
+            server.listen(PORT, '0.0.0.0', () => {
                 console.log(`Server running on port ${PORT}`);
+                console.log('Socket.IO attached and listening for connections');
             });
 
             process.on('unhandledRejection', (err, promise) => {
                 console.error(`Error: ${err.message}`);
-                app.close(() => process.exit(1));
+                // Close the HTTP server gracefully
+                try {
+                    server.close(() => process.exit(1));
+                } catch (closeErr) {
+                    console.error('Error closing server after unhandledRejection:', closeErr.message);
+                    process.exit(1);
+                }
             });
         }
 

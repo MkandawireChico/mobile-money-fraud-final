@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
+    // Allow importing files that include the .ts/.tsx extension in import paths
+    // (some files in this repo use explicit extensions). This is a non-invasive
+    // fix that avoids editing many source files.
+    "allowImportingTsExtensions": true,
     "target": "es5",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,

@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install server dependencies
+        working-directory: ./server
+        run: |
+          npm ci
+      - name: Run npm audit
+        working-directory: ./server
+        run: |
+          npm audit --audit-level=moderate || true
+
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install client dependencies
+        working-directory: ./client
+        run: |
+          npm ci
+      - name: Build client
+        working-directory: ./client
+        run: |
+          npm run build

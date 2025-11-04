@@ -25,6 +25,9 @@ import TransactionsTable from '../components/transactions/TransactionsTable.tsx'
 import TransactionFilter from '../components/transactions/TransactionFilter.tsx';
 import TransactionIngestionDialog from '../components/transactions/TransactionIngestionDialog.tsx';
 import { Transaction } from '../types/index';
+import SimulationButton from '../components/SimulationButton';
+import { useAuth } from '../context/AuthContext';
+import { getSocket, addSocketListeners } from '../utils/socketClient';
 
 const TransactionsPage: React.FC = () => {
     const history = useHistory();
@@ -68,6 +71,8 @@ const TransactionsPage: React.FC = () => {
     const [snackbarOpen, setSnackbarOpen] = useState<boolean>(false);
     const [snackbarMessage, setSnackbarMessage] = useState<string>('');
     const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error' | 'info' | 'warning'>('info');
+
+    const { user } = useAuth();
 
     const showSnackbar = useCallback((message: string, severity: 'success' | 'error' | 'info' | 'warning') => {
         setSnackbarMessage(message);
@@ -155,6 +160,55 @@ const TransactionsPage: React.FC = () => {
     useEffect(() => {
         fetchTransactions();
     }, [fetchTransactions]);
+
+    // Socket listeners: subscribe to new transactions and updates
+    useEffect(() => {
+        try {
+            const token = localStorage.getItem('token') || localStorage.getItem('authToken') || undefined;
+            const socket = getSocket(token as string | undefined);
+
+            const off = addSocketListeners(socket, {
+                onNewTransaction: (tx: any) => {
+                    try {
+                        const parsedTx: any = {
+                            ...tx,
+                            amount: tx.amount !== undefined ? parseFloat(tx.amount) : 0,
+                            risk_score: tx.risk_score !== undefined && tx.risk_score !== null ? parseFloat(tx.risk_score) : 0.0,
+                            is_fraud: Boolean(tx.is_fraud),
+                        };
+                        setTransactions(prev => [parsedTx as any, ...prev]);
+                        setTotalTransactions(prev => prev + 1);
+                        showSnackbar('New transaction received', 'info');
+                    } catch (e) {
+                        console.error('Error handling newTransaction socket event', e);
+                    }
+                },
+                onTransactionUpdated: (tx: any) => {
+                    try {
+                        const parsedTx: any = {
+                            ...tx,
+                            amount: tx.amount !== undefined ? parseFloat(tx.amount) : 0,
+                            risk_score: tx.risk_score !== undefined && tx.risk_score !== null ? parseFloat(tx.risk_score) : 0.0,
+                            is_fraud: Boolean(tx.is_fraud),
+                        };
+                        setTransactions(prev => prev.map(t => (t.transaction_id === parsedTx.transaction_id ? parsedTx : t)));
+                        showSnackbar(`Transaction ${parsedTx.transaction_id} updated`, 'info');
+                    } catch (e) {
+                        console.error('Error handling transactionUpdated socket event', e);
+                    }
+                },
+                onNewAnomaly: (an: any) => {
+                    showSnackbar('New anomaly detected', 'warning');
+                }
+            });
+
+            return () => {
+                try { off(); } catch (e) { /* ignore */ }
+            };
+        } catch (err) {
+            console.warn('Socket initialization failed', err);
+        }
+    }, [showSnackbar]);
 
     // Handle click outside to close filter dropdown
     useEffect(() => {
@@ -505,6 +559,15 @@ const TransactionsPage: React.FC = () => {
                             >
                                 <CloudUploadIcon size={20} className="mr-2" /> Ingest CSV
                             </button>
+                            <div className="inline-flex items-center">
+                                {user && (user.role === 'admin' || user.role === 'analyst') && (
+                                    <SimulationButton onSimulated={(data) => {
+                                        // After simulation, refresh the transactions list and show a toast
+                                        fetchTransactions();
+                                        showSnackbar(`Simulation created ${data.transactions?.length || 0} transaction(s)`, 'success');
+                                    }} />
+                                )}
+                            </div>
                             <button
                                 onClick={fetchTransactions}
                                 disabled={loading}

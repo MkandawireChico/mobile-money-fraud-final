@@ -3,6 +3,10 @@
 // This file now exports a function that takes the initialized userModel and jwt as arguments
 module.exports = (userModel, jwt) => { // <-- Key change: Accept userModel and jwt as arguments
 
+    if (!process.env.JWT_SECRET) {
+        console.warn('[AuthMiddleware] JWT_SECRET is not set in environment. Token verification will fail.');
+    }
+
     const protect = async (req, res, next) => {
         let token;
 
@@ -32,8 +36,8 @@ module.exports = (userModel, jwt) => { // <-- Key change: Accept userModel and j
                 // Proceed to the next middleware/route handler
                 next();
             } catch (error) {
-                // Log the error for debugging purposes
-                console.error('[AuthMiddleware] Token verification failed:', error.message);
+                // Log the error for debugging purposes (include error name)
+                console.error('[AuthMiddleware] Token verification failed:', error.name, error.message);
 
                 if (error.name === 'TokenExpiredError') {
                     return res.status(401).json({ message: 'Not authorized: Token expired. Please log in again.' });

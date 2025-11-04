@@ -6,6 +6,9 @@
       "scripts": {
             "start": "node app.js",
             "dev": "nodemon app.js",
+            "migrate": "node scripts/create-tables.js",
+            "seed": "node scripts/seed-data.js",
+            "setup-db": "npm run migrate && npm run seed",
             "test": "echo \"Error: no test specified\" && exit 1",
             "setup-malawi": "node scripts/setupMalawiData.js",
             "update-malawi": "node scripts/updateMalawiTransactions.js",
@@ -28,28 +31,28 @@
             "express": "^4.19.2",
             "express-rate-limit": "^8.1.0",
             "faker": "^5.5.3",
-            "git": "^0.1.5",
             "helmet": "^7.1.0",
             "json2csv": "^6.0.0-alpha.2",
             "jsonwebtoken": "^9.0.2",
-            "matplotlib": "^1.0.0",
             "morgan": "^1.10.0",
             "multer": "^1.4.5-lts.1",
             "nodemailer": "^7.0.9",
             "pdfkit": "^0.15.2",
             "pg": "^8.12.0",
             "pg-format": "^1.0.4",
+            "pino": "^10.1.0",
+            "pino-http": "^11.0.0",
+            "prom-client": "^13.2.0",
             "redis": "^4.6.15",
-            "seaborn": "^0.0.1-security",
             "sequelize": "^6.37.7",
             "socket.io": "^4.7.5",
             "swagger-jsdoc": "^6.2.8",
             "swagger-ui-express": "^5.0.0",
             "uuid": "^11.1.0",
-            "uvicorn": "^0.0.1-security",
             "ws": "^8.18.3"
       },
       "devDependencies": {
-            "nodemon": "^3.1.4"
+            "nodemon": "^3.1.4",
+            "pino-pretty": "^13.1.2"
       }
 }

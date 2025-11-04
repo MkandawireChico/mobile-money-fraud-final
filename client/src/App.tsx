@@ -19,6 +19,7 @@ import ReportsPage from './pages/ReportsPage.tsx';
 import TransactionsPage from './pages/TransactionsPage.tsx';
 import TransactionDetailsPage from './pages/TransactionDetailsPage.tsx';
 import FraudCaseReviewPage from './pages/FraudCaseReviewPage.tsx';
+import SimulationResultPage from './pages/SimulationResultPage.tsx';
 import AnomaliesPage from './pages/AnomaliesPage.tsx'; // Renamed import
 import AnomalyDetailsPage from './pages/AnomalyDetailsPage.tsx'; // Corrected import from AlertDetailspage.tsx
 import UsersPage from './pages/UsersPage.tsx';
@@ -140,6 +141,9 @@ const App: React.FC = () => {
                         </PrivateRoute>
                         <PrivateRoute path="/transactions/:id" exact allowedRoles={['admin', 'analyst', 'viewer']}>
                             <TransactionDetailsPage />
+                        </PrivateRoute>
+                        <PrivateRoute path="/simulation/:id" exact allowedRoles={['admin', 'analyst']}>
+                            <SimulationResultPage />
                         </PrivateRoute>
                         <PrivateRoute path="/case-review/:id" exact allowedRoles={['admin', 'analyst']}>
                             <FraudCaseReviewPage />

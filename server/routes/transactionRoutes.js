@@ -29,6 +29,9 @@ module.exports = (controller, protect, authorize, upload) => {
 
     router.post('/batch', authorize(['admin']), controller.createTransactionsBatch);
 
+    // Simulate incoming transactions for testing/demos
+    router.post('/simulate', authorize(['admin','analyst']), controller.simulateTransaction);
+
     router.post('/', authorize(['admin', 'analyst']), controller.createTransaction);
 
     router.put('/:id', authorize(['admin', 'analyst']), controller.updateTransaction);

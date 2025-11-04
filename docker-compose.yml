@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-frauddb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  server:
+    build:
+      context: ./server
+    env_file:
+      - ./server/.env.example
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./server:/usr/src/app
+    command: ["node", "app.js"]
+
+  client:
+    build:
+      context: ./client
+    ports:
+      - "3000:80"
+    volumes:
+      - ./client:/usr/src/app
+    depends_on:
+      - server
+
+volumes:
+  pgdata:

@@ -1,8 +1,11 @@
 
 
 const csv = require('csv-parser');
+const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
 const FraudDetectionService = require('../services/FraudDetectionService');
 const { maskTransactionArray, maskTransactionData } = require('../utils/dataMasking');
+const { logger } = require('../utils/logger');
 
 module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
@@ -26,7 +29,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             });
 
         } catch (auditError) {
-            console.error(`[AuditLog Error] Failed to create audit log for ${actionType}:`, auditError.message);
+            logger.error({ err: auditError }, `[AuditLog Error] Failed to create audit log for ${actionType}: ${auditError.message}`);
         }
     };
 
@@ -88,7 +91,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             res.status(200).json({ transactions: maskedTransactions, totalCount });
         } catch (error) {
-            console.error('[TransactionController] Error fetching transactions:', error.message, error.stack);
+            logger.error({ err: error }, '[TransactionController] Error fetching transactions');
             next(error);
         }
     };
@@ -106,7 +109,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             res.status(200).json(maskedTransaction);
         } catch (error) {
-            console.error(`[TransactionController] Error fetching transaction by ID ${req.params.id}:`, error.message, error.stack);
+            logger.error({ err: error }, `[TransactionController] Error fetching transaction by ID ${req.params.id}`);
             next(error);
         }
     };
@@ -153,9 +156,9 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             if (assessment.is_anomaly) {
                 try {
                     const newAnomaly = await anomalyService.createAnomalyFromTransaction(createdTransaction, assessment);
-                    console.log(`[TransactionController] Created anomaly ${newAnomaly?.id} for new fraud transaction ${createdTransaction.transaction_id}`);
+                    logger.info({ anomalyId: newAnomaly?.id, transactionId: createdTransaction.transaction_id }, `Created anomaly for new fraud transaction`);
                 } catch (anomalyError) {
-                    console.error(`[TransactionController] Failed to create anomaly for new transaction:`, anomalyError.message);
+                    logger.error({ err: anomalyError }, `[TransactionController] Failed to create anomaly for new transaction: ${anomalyError.message}`);
                     // Don't fail the transaction creation if anomaly creation fails
                 }
             }
@@ -164,7 +167,95 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             res.status(201).json(createdTransaction);
         } catch (error) {
-            console.error('[TransactionController] Error creating transaction:', error.message, error.stack);
+            logger.error({ err: error }, '[TransactionController] Error creating transaction');
+            next(error);
+        }
+    };
+
+    const simulateTransaction = async (req, res, next) => {
+        try {
+            // Determine the user id for simulated transactions. Prefer req.user (set by protect middleware),
+            // otherwise attempt to decode the bearer token in the Authorization header.
+            // Allow overriding simulator user via environment for local testing.
+            let simulatorUserId = process.env.SIMULATOR_USER_ID || (req.user && req.user.id ? req.user.id : null);
+            if (!simulatorUserId) {
+                const authHeader = req.headers && req.headers.authorization ? req.headers.authorization : null;
+                if (authHeader && authHeader.startsWith('Bearer ')) {
+                    const token = authHeader.split(' ')[1];
+                    try {
+                        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                        simulatorUserId = decoded.id;
+                    } catch (e) {
+                        console.warn('[TransactionController] Could not decode token for simulator user id:', e.message);
+                    }
+                }
+            }
+
+            if (!simulatorUserId) {
+                return res.status(401).json({ message: 'Authentication required to simulate transactions.' });
+            }
+            const count = req.query.count ? parseInt(req.query.count, 10) : 1;
+            const created = [];
+            const createdAnomalies = [];
+
+            const sampleCities = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba'];
+            const sampleTelcos = ['TNM', 'Airtel', 'MTN'];
+            const sampleDeviceTypes = ['mobile', 'desktop', 'tablet'];
+
+            for (let i = 0; i < Math.max(1, count); i++) {
+                const simulated = {
+                    transaction_id: `SIM-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+                    // Use the requesting user as the owner of simulated transactions to satisfy the
+                    // foreign key constraint on transactions.user_id
+                    user_id: simulatorUserId,
+                    amount: parseFloat((Math.random() * 100000).toFixed(2)),
+                    currency: 'MWK',
+                    timestamp: new Date().toISOString(),
+                    status: 'completed',
+                    telco_provider: sampleTelcos[Math.floor(Math.random() * sampleTelcos.length)],
+                    device_type: sampleDeviceTypes[Math.floor(Math.random() * sampleDeviceTypes.length)],
+                    location_city: sampleCities[Math.floor(Math.random() * sampleCities.length)],
+                    location_country: 'Malawi',
+                    transaction_type: 'p2p_transfer',
+                    description: 'Simulated transaction for testing',
+                    is_new_device: Math.random() > 0.8,
+                    is_new_location: Math.random() > 0.9,
+                };
+
+                const mlInputData = prepareMlInputData(simulated);
+                const assessment = await fraudDetectionService.checkTransaction(mlInputData);
+
+                simulated.is_fraud = assessment.is_anomaly;
+                simulated.risk_score = assessment.risk_score;
+
+                const saved = (await transactionModel.createMany([simulated]))[0];
+                created.push(saved);
+
+                // Create anomaly if detected
+                if (assessment.is_anomaly) {
+                    try {
+                        const newAnomaly = await anomalyService.createAnomalyFromTransaction(saved, assessment);
+                        if (newAnomaly) createdAnomalies.push(newAnomaly);
+                    } catch (anErr) {
+                logger.error({ err: anErr }, '[TransactionController] Failed to create anomaly for simulated transaction');
+                    }
+                }
+
+                io.emit('newTransaction', saved);
+            }
+
+            await logAudit(
+                'TRANSACTIONS_SIMULATED',
+                req,
+                `Simulated ${created.length} transactions for testing.`,
+                { count: created.length },
+                'Transaction',
+                null
+            );
+
+            res.status(201).json({ transactions: created, anomalies: createdAnomalies });
+        } catch (error) {
+            logger.error({ err: error }, '[TransactionController] Error simulating transactions');
             next(error);
         }
     };
@@ -221,9 +312,9 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                         risk_factors: ['manual_fraud_flag']
                     });
 
-                    console.log(`[TransactionController] Created anomaly ${newAnomaly?.id} for fraud transaction ${updatedTransaction.transaction_id}`);
+                    logger.info({ anomalyId: newAnomaly?.id, transactionId: updatedTransaction.transaction_id }, 'Created anomaly for fraud transaction');
                 } catch (anomalyError) {
-                    console.error(`[TransactionController] Failed to create anomaly for fraud transaction:`, anomalyError.message);
+                    logger.error({ err: anomalyError }, `[TransactionController] Failed to create anomaly for fraud transaction: ${anomalyError.message}`);
                     // Don't fail the transaction update if anomaly creation fails
                 }
             } else if (wasFraud && !isFraud) {
@@ -246,9 +337,9 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                             });
                         }
                     }
-                    console.log(`[TransactionController] Resolved anomalies for unflagged transaction ${updatedTransaction.transaction_id}`);
+                    logger.info({ transactionId: updatedTransaction.transaction_id }, `Resolved anomalies for unflagged transaction`);
                 } catch (anomalyError) {
-                    console.error(`[TransactionController] Failed to resolve anomalies for unflagged transaction:`, anomalyError.message);
+                    logger.error({ err: anomalyError }, `[TransactionController] Failed to resolve anomalies for unflagged transaction: ${anomalyError.message}`);
                 }
             }
 
@@ -263,9 +354,9 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                             updated_at: new Date().toISOString()
                         });
                     }
-                    console.log(`[TransactionController] Updated ${relatedAnomalies.length} related anomalies with new transaction data`);
+                    logger.info({ updatedCount: relatedAnomalies.length, transactionId: updatedTransaction.transaction_id }, `Updated related anomalies with new transaction data`);
                 } catch (anomalyError) {
-                    console.error(`[TransactionController] Failed to update related anomalies:`, anomalyError.message);
+                    logger.error({ err: anomalyError }, `[TransactionController] Failed to update related anomalies: ${anomalyError.message}`);
                 }
             }
 
@@ -287,7 +378,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             res.status(200).json(updatedTransaction);
         } catch (error) {
-            console.error(`[TransactionController] Error updating transaction ${req.params.id}:`, error.message, error.stack);
+            logger.error({ err: error }, `[TransactionController] Error updating transaction ${req.params.id}`);
             next(error);
         }
     };
@@ -315,7 +406,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             res.status(204).send();
         } catch (error) {
-            console.error(`[TransactionController] Error deleting transaction ${req.params.id}:`, error.message, error.stack);
+            logger.error({ err: error }, `[TransactionController] Error deleting transaction ${req.params.id}`);
             next(error);
         }
     };
@@ -408,7 +499,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                             totalRowsProcessed: rowCount
                         });
                     } catch (dbError) {
-                        console.error('[Transaction Ingestion] Error creating transactions in batch:', dbError.message, dbError.stack);
+                        logger.error({ err: dbError }, '[Transaction Ingestion] Error creating transactions in batch');
                         await logAudit(
                             'TRANSACTIONS_INGESTION_FAILED',
                             req,
@@ -421,7 +512,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                     }
                 })
                 .on('error', async (err) => {
-                    console.error('[Transaction Ingestion] CSV parsing error:', err.message, err.stack);
+                    logger.error({ err }, '[Transaction Ingestion] CSV parsing error');
                     await logAudit(
                         'TRANSACTIONS_INGESTION_FAILED',
                         req,
@@ -433,7 +524,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                     next(err);
                 });
         } catch (error) {
-            console.error('[Transaction Ingestion] Initial setup error:', error.message, error.stack);
+              logger.error({ err: error }, '[Transaction Ingestion] Initial setup error');
             await logAudit(
                 'TRANSACTIONS_INGESTION_FAILED',
                 req,
@@ -453,7 +544,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             let trend = await transactionModel.getTransactionsTrend(interval, parseInt(period, 10));
 
-            console.log(`[TransactionController] Raw trend data:`, JSON.stringify(trend?.slice(0, 3), null, 2));
+            logger.debug({ sampleTrend: trend?.slice(0, 3) }, 'Raw trend data');
 
             // Always ensure proper formatting, whether we have data or not
             if (trend && trend.length > 0) {
@@ -462,7 +553,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                     timestamp: item.date || item.timestamp,
                     volume: parseInt(item.count) || parseInt(item.volume) || 0
                 }));
-                console.log(`[TransactionController] Formatted trend data:`, JSON.stringify(trend?.slice(0, 3), null, 2));
+                logger.debug({ formattedTrendSample: trend?.slice(0, 3) }, 'Formatted trend data');
             } else {
                 // Generate mock data if no real data
 
@@ -479,7 +570,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
 
             res.status(200).json(trend);
         } catch (error) {
-            console.error('[TransactionController] Error fetching transaction volume trend:', error.message, error.stack);
+              logger.error({ err: error }, '[TransactionController] Error fetching transaction volume trend');
             // Return mock data on error
             const mockData = [];
             for (let i = 29; i >= 0; i--) {
@@ -501,7 +592,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             const trend = await transactionModel.getFraudRateTrend(interval, parseInt(period, 10));
             res.status(200).json(trend);
         } catch (error) {
-            console.error('[TransactionController] Error fetching fraud rate trend:', error.message, error.stack);
+                logger.error({ err: error }, '[TransactionController] Error fetching fraud rate trend');
             next(error);
         }
     };
@@ -512,7 +603,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             const distribution = await transactionModel.getTransactionTypeDistribution();
             res.status(200).json(distribution);
         } catch (error) {
-            console.error('[TransactionController] Error fetching transaction type distribution:', error.message, error.stack);
+                logger.error({ err: error }, '[TransactionController] Error fetching transaction type distribution');
             next(error);
         }
     };
@@ -524,7 +615,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             const locations = await transactionModel.getTopLocations(type, parseInt(limit, 10));
             res.status(200).json(locations);
         } catch (error) {
-            console.error('[TransactionController] Error fetching top locations:', error.message, error.stack);
+                logger.error({ err: error }, '[TransactionController] Error fetching top locations');
             next(error);
         }
     };
@@ -536,7 +627,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             const fraudulentTransactions = await transactionModel.getTopFraudulent(parseInt(limit, 10));
             res.status(200).json(fraudulentTransactions);
         } catch (error) {
-            console.error('[TransactionController] Error fetching top fraudulent transactions:', error.message, error.stack);
+                logger.error({ err: error }, '[TransactionController] Error fetching top fraudulent transactions');
             next(error);
         }
     };
@@ -548,7 +639,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             const transaction = await transactionModel.findById(transaction_id);
 
             if (!transaction) {
-                console.warn(`[TransactionController] Transaction with ID ${transaction_id} not found for fraud prediction.`);
+                logger.warn({ transactionId }, `[TransactionController] Transaction with ID ${transaction_id} not found for fraud prediction.`);
                 return res.status(404).json({ message: 'Transaction not found.' });
             }
 
@@ -579,7 +670,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                 try {
                     await anomalyService.createAnomalyFromTransaction(updatedTransaction);
                 } catch (anomalyError) {
-                    console.error('[TransactionController] Error creating anomaly:', anomalyError.message);
+                    logger.error({ err: anomalyError }, '[TransactionController] Error creating anomaly');
                     // Continue execution even if anomaly creation fails
                 }
             }
@@ -598,7 +689,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                 }
             });
         } catch (error) {
-            console.error(`[TransactionController] Error during fraud prediction for transaction ${req.params.transaction_id}:`, error.message, error.stack);
+              logger.error({ err: error }, `[TransactionController] Error during fraud prediction for transaction ${req.params.transaction_id}`);
             await logAudit(
                 'TRANSACTION_FRAUD_PREDICTION_FAILED',
                 req,
@@ -667,7 +758,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                 updatedTransactions
             });
         } catch (error) {
-            console.error(`[TransactionController] Error during batch fraud prediction:`, error.message, error.stack);
+              logger.error({ err: error }, `[TransactionController] Error during batch fraud prediction`);
             await logAudit(
                 'BATCH_FRAUD_PREDICTION_FAILED',
                 req,
@@ -752,7 +843,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
                             transaction_id: transactionData.transaction_id || 'unknown',
                             error: createError.message
                         });
-                        console.error(`[TransactionController] Failed to create transaction ${transactionData.transaction_id}:`, createError.message);
+                            logger.error({ err: createError, transactionId: transactionData.transaction_id }, `[TransactionController] Failed to create transaction ${transactionData.transaction_id}`);
                     }
                 }
 
@@ -789,7 +880,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
             });
 
         } catch (error) {
-            console.error('[TransactionController] Error in batch transaction creation:', error.message, error.stack);
+              logger.error({ err: error }, '[TransactionController] Error in batch transaction creation');
             await logAudit(
                 'BATCH_TRANSACTIONS_CREATION_FAILED',
                 req,
@@ -806,6 +897,7 @@ module.exports = (transactionModel, auditLogModel, io, anomalyService) => {
         getAllTransactions,
         getTransactionById,
         createTransaction,
+        simulateTransaction,
         updateTransaction,
         deleteTransaction,
         ingestTransactionsFromCsv,

@@ -34,7 +34,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 }) => {
   const [predictingId, setPredictingId] = useState<string | null>(null);
   const [selectedRow, setSelectedRow] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<keyof Transaction | null>(null);
+  const [sortField, setSortField] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Debug logging for user_id
@@ -174,7 +174,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     onRowClick(transactionId);
   };
 
-  const handleSort = (field: keyof Transaction) => {
+  const handleSort = (field: string) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -193,6 +193,69 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
       return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
     }
   });
+
+  // --- Operator / MSISDN helpers ---
+  const normalizeMsisdn = (msisdn?: string | null) => {
+    if (!msisdn) return '';
+    return msisdn.replace(/[^0-9+]/g, '');
+  };
+
+  const formatMsisdn = (msisdn?: string | null) => {
+    const raw = normalizeMsisdn(msisdn);
+    if (!raw) return 'N/A';
+    // Prefer international format
+    let digits = raw;
+    if (digits.startsWith('+')) digits = digits.slice(1);
+    // If local format (starts with 0) convert to +265 local
+    if (digits.startsWith('0')) digits = `265${digits.slice(1)}`;
+    if (!digits.startsWith('265')) {
+      // fallback: return as-is (with +)
+      return `+${digits}`;
+    }
+    // Format as +265 88x xxx xxx (grouped)
+    const country = '+265';
+    const rest = digits.slice(3);
+    const part1 = rest.slice(0, 3);
+    const part2 = rest.slice(3, 6);
+    const part3 = rest.slice(6, 9);
+    const formatted = `${country} ${part1}${part2 ? ' ' + part2 : ''}${part3 ? ' ' + part3 : ''}`.trim();
+    // Mask middle digits for privacy (show first 3 and last 3)
+    const visibleStart = `${country} ${part1}`;
+    const visibleEnd = part3 ? part3 : rest.slice(-3);
+    return `${visibleStart} ••• ${visibleEnd}`;
+  };
+
+  const detectOperatorFromMsisdn = (msisdn?: string | null) => {
+    // Prefer explicit telco_provider on transaction; if not present, attempt prefix mapping
+    const raw = normalizeMsisdn(msisdn);
+    if (!raw) return 'Unknown';
+    let digits = raw.startsWith('+') ? raw.slice(1) : raw;
+    if (digits.startsWith('0')) digits = `265${digits.slice(1)}`;
+    if (digits.startsWith('265')) {
+      const prefix = digits.slice(3, 5); // two-digit prefix after country
+      // Reasonable default mappings for Malawi operators (adjustable)
+      const tnmPrefixes = ['88', '85', '86', '84'];
+      const airtelPrefixes = ['99', '97', '96', '93'];
+      if (tnmPrefixes.includes(prefix)) return 'TNM';
+      if (airtelPrefixes.includes(prefix)) return 'Airtel';
+    }
+    return 'Unknown';
+  };
+
+  const renderNetworkBadge = (transaction: Transaction) => {
+    const explicit = transaction.telco_provider;
+    const detected = detectOperatorFromMsisdn(transaction.sender_msisdn);
+    const provider = explicit || (detected !== 'Unknown' ? detected : 'Unknown');
+    const label = provider === 'Unknown' ? '—' : provider;
+    const baseClasses = 'inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold';
+    if (provider === 'TNM') {
+      return <span className={`${baseClasses} bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100`}>TNM</span>;
+    }
+    if (provider === 'Airtel') {
+      return <span className={`${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100`}>Airtel</span>;
+    }
+    return <span className={`${baseClasses} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300`}>{label}</span>;
+  };
 
   return (
     <div className="relative overflow-x-auto shadow-md sm:rounded-lg border border-gray-200 dark:border-gray-700">
@@ -215,9 +278,15 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
               </button>
             </th>
             <th scope="col" className="px-6 py-4 font-medium">
-              <button onClick={() => handleSort('user_id')} className="flex items-center" aria-label="Sort by User ID">
-                User ID
-                {sortField === 'user_id' && <ArrowUpDown size={16} className="ml-1" />}
+                <button onClick={() => handleSort('user_id')} className="flex items-center" aria-label="Sort by Account / MSISDN">
+                  Account / MSISDN
+                  {sortField === 'user_id' && <ArrowUpDown size={16} className="ml-1" />}
+                </button>
+            </th>
+            <th scope="col" className="px-6 py-4 font-medium">
+              <button onClick={() => handleSort('telco_provider')} className="flex items-center" aria-label="Sort by Network Operator">
+                Network
+                {sortField === 'telco_provider' && <ArrowUpDown size={16} className="ml-1" />}
               </button>
             </th>
             <th scope="col" className="px-6 py-4 font-medium">
@@ -315,10 +384,21 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                   </td>
                   <td
                     className="px-6 py-4"
-                    title={transaction.user_id || 'Missing'}
-                    aria-label={`User ID: ${transaction.user_id || 'Not available'}`}
+                    title={transaction.sender_msisdn || transaction.user_id || 'Missing'}
+                    aria-label={`Account: ${transaction.sender_msisdn || transaction.user_id || 'Not available'}`}
                   >
-                    {transaction.user_id || 'N/A'}
+                    {/* Prefer showing MSISDN (sender phone) in formatted/masked form; fall back to user_id */}
+                    {transaction.sender_msisdn ? (
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-gray-900 dark:text-gray-100">{formatMsisdn(transaction.sender_msisdn)}</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{transaction.user_id ? `${String(transaction.user_id).slice(0,8)}...${String(transaction.user_id).slice(-6)}` : ''}</span>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-gray-900 dark:text-gray-100">{transaction.user_id || 'N/A'}</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    {renderNetworkBadge(transaction)}
                   </td>
                   <td className="px-6 py-4">
                     <span className="font-semibold text-gray-900 dark:text-gray-100">

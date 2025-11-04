@@ -58,6 +58,26 @@ module.exports = (anomalyModel, transactionModel) => {
 
                 const result = await anomalyModel.create(anomalyData);
 
+                // Attempt to update the related transaction to reflect anomaly detection
+                try {
+                    if (transaction.transaction_id && transactionModel && typeof transactionModel.update === 'function') {
+                        await transactionModel.update(transaction.transaction_id, {
+                            is_fraud: true,
+                            risk_score: anomalyData.risk_score || 0.5
+                        });
+
+                        // Emit transaction update via socket handler if available
+                        try {
+                            require('../socket/socketHandler').emitTransactionUpdated({ transaction_id: transaction.transaction_id, is_fraud: true, risk_score: anomalyData.risk_score || 0.5 });
+                        } catch (emitErr) {
+                            // Fallback to console if socket handler fails
+                            console.warn('[AnomalyService] Failed to emit transaction update after anomaly creation:', emitErr.message);
+                        }
+                    }
+                } catch (txUpdateErr) {
+                    console.error('[AnomalyService] Failed to update related transaction after anomaly creation:', txUpdateErr.message);
+                }
+
                 // Delegate emission to socketHandler
                 return result;
             }
@@ -154,6 +174,24 @@ module.exports = (anomalyModel, transactionModel) => {
 
                 const result = await anomalyModel.create(anomalyData);
 
+                // Attempt to update the related transaction to reflect anomaly detection
+                try {
+                    if (transaction.transaction_id && transactionModel && typeof transactionModel.update === 'function') {
+                        await transactionModel.update(transaction.transaction_id, {
+                            is_fraud: true,
+                            risk_score: anomalyData.risk_score || assessment.risk_score || 0.0
+                        });
+
+                        try {
+                            require('../socket/socketHandler').emitTransactionUpdated({ transaction_id: transaction.transaction_id, is_fraud: true, risk_score: anomalyData.risk_score || assessment.risk_score || 0.0 });
+                        } catch (emitErr) {
+                            console.warn('[AnomalyService] Failed to emit transaction update after ML anomaly creation:', emitErr.message);
+                        }
+                    }
+                } catch (txUpdateErr) {
+                    console.error('[AnomalyService] Failed to update related transaction after ML anomaly creation:', txUpdateErr.message);
+                }
+
                 // Delegate emission to socketHandler
                 require('../socket/socketHandler').emitNewAnomaly(result);
                 return result;
@@ -169,8 +207,40 @@ module.exports = (anomalyModel, transactionModel) => {
         try {
             const result = await anomalyModel.update(anomalyId, updateData);
             if (result) {
-
                 require('../socket/socketHandler').emitAnomalyUpdated(result);
+
+                // Keep transaction record in sync when anomaly changes
+                try {
+                    if (result.transaction_id && transactionModel && typeof transactionModel.update === 'function') {
+                        const txUpdates = {};
+
+                        if (updateData.hasOwnProperty('risk_score')) {
+                            txUpdates.risk_score = updateData.risk_score;
+                        }
+
+                        if (updateData.hasOwnProperty('status')) {
+                            // If anomaly is marked false_positive, unflag the transaction.
+                            if (updateData.status === 'false_positive') {
+                                txUpdates.is_fraud = false;
+                            }
+                            // If anomaly is confirmed (resolved as fraud), ensure transaction is flagged
+                            if (updateData.status === 'resolved') {
+                                txUpdates.is_fraud = true;
+                            }
+                        }
+
+                        if (Object.keys(txUpdates).length > 0) {
+                            await transactionModel.update(result.transaction_id, txUpdates);
+                            try {
+                                require('../socket/socketHandler').emitTransactionUpdated({ transaction_id: result.transaction_id, ...txUpdates });
+                            } catch (emitErr) {
+                                console.warn('[AnomalyService] Failed to emit transaction update after anomaly update:', emitErr.message);
+                            }
+                        }
+                    }
+                } catch (syncErr) {
+                    console.error('[AnomalyService] Failed to sync transaction after anomaly update:', syncErr.message);
+                }
             }
             return result;
         } catch (error) {
@@ -181,11 +251,31 @@ module.exports = (anomalyModel, transactionModel) => {
 
     const deleteAnomaly = async (anomalyId) => {
         try {
+            // Fetch anomaly to get transaction_id before deletion
+            const existing = await anomalyModel.findById(anomalyId);
             const result = await anomalyModel.del(anomalyId);
             if (result) {
-
                 require('../socket/socketHandler').emitAnomalyDeleted(anomalyId);
+
+                // If the deleted anomaly referenced a transaction, and there are no more anomalies for that transaction,
+                // unflag the transaction as fraud and reset risk_score.
+                try {
+                    if (existing && existing.transaction_id && transactionModel && typeof transactionModel.findById === 'function') {
+                        const remaining = await anomalyModel.findByTransactionId(existing.transaction_id);
+                        if (!remaining || remaining.length === 0) {
+                            await transactionModel.update(existing.transaction_id, { is_fraud: false, risk_score: 0.0 });
+                            try {
+                                require('../socket/socketHandler').emitTransactionUpdated({ transaction_id: existing.transaction_id, is_fraud: false, risk_score: 0.0 });
+                            } catch (emitErr) {
+                                console.warn('[AnomalyService] Failed to emit transaction update after anomaly deletion:', emitErr.message);
+                            }
+                        }
+                    }
+                } catch (syncErr) {
+                    console.error('[AnomalyService] Failed to sync transaction after anomaly deletion:', syncErr.message);
+                }
             }
+
             return result;
         } catch (error) {
             console.error('[AnomalyService] Error deleting anomaly:', error.message);
