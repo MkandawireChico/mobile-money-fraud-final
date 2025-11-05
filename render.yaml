@@ -1,0 +1,32 @@
+# Render service definition for backend and frontend.
+# Replace names, env and plan as needed. This file helps Render import services from the repository.
+
+services:
+  - type: web
+    name: mobile-money-fraud-backend
+    env: docker
+    repo: "${RENDER_REPO:-${GIT_REPOSITORY}}"
+    branch: main
+    dockerfilePath: server/Dockerfile
+    buildCommand: ""
+    startCommand: "node app.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5000"
+
+  - type: web
+    name: mobile-money-fraud-frontend
+    env: docker
+    repo: "${RENDER_REPO:-${GIT_REPOSITORY}}"
+    branch: main
+    dockerfilePath: client/Dockerfile
+    buildCommand: ""
+    startCommand: "nginx -g 'daemon off;'"
+    envVars:
+      - key: REACT_APP_API_URL
+        value: "https://your-backend.example.com"
+
+# After creating services in Render, copy the service IDs into your GitHub Secrets:
+# RENDER_SERVICE_ID_BACKEND and RENDER_SERVICE_ID_FRONTEND so the trigger workflow can call the API.

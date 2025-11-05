@@ -53,3 +53,52 @@ jobs:
         run: |
           echo "Server image: ghcr.io/${{ github.repository_owner }}/mobile-money-fraud-backend:latest"
           echo "Client image: ghcr.io/${{ github.repository_owner }}/mobile-money-fraud-frontend:latest"
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Trigger Render deploys (optional)
+        if: secrets.RENDER_API_KEY && (secrets.RENDER_SERVICE_ID_BACKEND || secrets.RENDER_SERVICE_ID_FRONTEND)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          set -euo pipefail
+          trigger_and_wait() {
+            SERVICE_ID="$1"
+            NAME="$2"
+            echo "Triggering deploy for ${NAME} (${SERVICE_ID})"
+            resp=$(curl -s -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{"clearCache": true}')
+            echo "Response: $resp"
+            deploy_id=$(echo "$resp" | jq -r .id // empty)
+            if [ -z "$deploy_id" ]; then
+              echo "Failed to trigger deploy for ${NAME}. Response:" >&2
+              echo "$resp" >&2
+              exit 1
+            fi
+            echo "${NAME} deploy id: $deploy_id"
+            for i in $(seq 1 60); do
+              status=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${deploy_id}" | jq -r .state)
+              echo "[${NAME}] poll #$i status=$status"
+              if [ "$status" = "success" ]; then
+                echo "${NAME} deploy succeeded"
+                return 0
+              fi
+              if [ "$status" = "failed" ]; then
+                echo "${NAME} deploy failed" >&2
+                return 1
+              fi
+              sleep 5
+            done
+            echo "${NAME} deploy timed out" >&2
+            return 1
+          }
+
+          if [ -n "${{ secrets.RENDER_SERVICE_ID_BACKEND }}" ]; then
+            trigger_and_wait "${{ secrets.RENDER_SERVICE_ID_BACKEND }}" "backend"
+          fi
+          if [ -n "${{ secrets.RENDER_SERVICE_ID_FRONTEND }}" ]; then
+            trigger_and_wait "${{ secrets.RENDER_SERVICE_ID_FRONTEND }}" "frontend"
+          fi

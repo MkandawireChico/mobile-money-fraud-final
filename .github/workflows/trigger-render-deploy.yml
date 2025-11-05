@@ -1,0 +1,84 @@
+# Trigger Render Deploy
+name: Trigger Render Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  trigger-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure jq available
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Trigger and monitor backend deploy on Render
+        if: secrets.RENDER_API_KEY && secrets.RENDER_SERVICE_ID_BACKEND
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID_BACKEND }}
+        run: |
+          set -euo pipefail
+          echo "Triggering backend deploy for service $SERVICE_ID"
+          resp=$(curl -s -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": true}')
+          echo "Trigger response: $resp"
+          deploy_id=$(echo "$resp" | jq -r .id // empty)
+          if [ -z "$deploy_id" ] ; then
+            echo "Failed to start deploy for backend. Response:" >&2
+            echo "$resp" >&2
+            exit 1
+          fi
+          echo "Backend deploy id: $deploy_id"
+          # Poll for deploy status
+          for i in $(seq 1 60); do
+            status=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${deploy_id}" | jq -r .state)
+            echo "[backend] Poll #$i - status=$status"
+            if [ "$status" = "success" ]; then
+              echo "Backend deploy succeeded"
+              break
+            fi
+            if [ "$status" = "failed" ]; then
+              echo "Backend deploy failed" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+
+      - name: Trigger and monitor frontend deploy on Render
+        if: secrets.RENDER_API_KEY && secrets.RENDER_SERVICE_ID_FRONTEND
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID_FRONTEND }}
+        run: |
+          set -euo pipefail
+          echo "Triggering frontend deploy for service $SERVICE_ID"
+          resp=$(curl -s -X POST "https://api.render.com/v1/services/${SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": true}')
+          echo "Trigger response: $resp"
+          deploy_id=$(echo "$resp" | jq -r .id // empty)
+          if [ -z "$deploy_id" ] ; then
+            echo "Failed to start deploy for frontend. Response:" >&2
+            echo "$resp" >&2
+            exit 1
+          fi
+          echo "Frontend deploy id: $deploy_id"
+          # Poll for deploy status
+          for i in $(seq 1 60); do
+            status=$(curl -s -H "Authorization: Bearer ${RENDER_API_KEY}" "https://api.render.com/v1/services/${SERVICE_ID}/deploys/${deploy_id}" | jq -r .state)
+            echo "[frontend] Poll #$i - status=$status"
+            if [ "$status" = "success" ]; then
+              echo "Frontend deploy succeeded"
+              break
+            fi
+            if [ "$status" = "failed" ]; then
+              echo "Frontend deploy failed" >&2
+              exit 1
+            fi
+            sleep 5
+          done
