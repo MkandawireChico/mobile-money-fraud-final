@@ -1,3 +1,4 @@
+import api from './axios';
 // Lightweight API helper for triggering server-side transaction simulation
 // Uses REACT_APP_API_URL and a JWT token from localStorage by default.
 export type SimulateOptions = {
@@ -5,8 +6,6 @@ export type SimulateOptions = {
   highRiskProbability?: number;
   userId?: string;
 };
-
-import api from './axios';
 
 export async function simulateTransactions(options: SimulateOptions = { count: 1 }) {
   // Use the shared axios instance so baseURL and auth headers are applied consistently.
