@@ -2,10 +2,10 @@
       "name": "fraud-detection-backend",
       "version": "1.0.0",
       "description": "Backend for Fraud Detection System",
-      "main": "app.js",
+      "main": "App.js",
       "scripts": {
-            "start": "node app.js",
-            "dev": "nodemon app.js",
+            "start": "node App.js",
+            "dev": "nodemon App.js",
             "migrate": "node scripts/create-tables.js",
             "seed": "node scripts/seed-data.js",
             "setup-db": "npm run migrate && npm run seed",
